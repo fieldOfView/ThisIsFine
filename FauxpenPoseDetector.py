@@ -288,7 +288,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument(
-        "--model", help="Name of the pose landmarker model bundle.", required=False, default="pose_landmarker.task"
+        "--model", help="Name of the pose landmarker model bundle.", required=False, default="resources/pose_landmarker.task"
     )
     parser.add_argument(
         "--numPoses", help="Max number of poses that can be detected by the landmarker.", required=False, default=1
@@ -336,7 +336,7 @@ if __name__ == "__main__":
         min_tracking_confidence=args.minTrackingConfidence,
     )
 
-    source = int(args.cameraId)
+    source = args.cameraId
     #source = "testing/dance1.mp4"
 
     if args.fullscreen:

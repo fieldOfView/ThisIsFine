@@ -13,22 +13,24 @@ class FineDetector(threading.Thread):
 
         self.detector = FauxpenPoseDetector(
             model="resources/pose_landmarker.task",
-            num_poses=3,
+            num_poses=2,
             min_pose_detection_confidence=0.5,
             min_pose_presence_confidence=0.5,
             min_tracking_confidence=0.5,
         )
+        self.detector.setDrawOptions(antialias=True, radius=2)
 
-        self.source = 0#"testing/dance1.mp4"
+        self.source = 0 #"testing/dance1.mp4"
         self.frame_width = 640
         self.frame_height = 360
-        self.frame_delay = 20
+        self.frame_delay = 10
 
         self.loop = True
         self.debug = False
 
         self.lock = threading.Lock()
         self.pose_image = None
+        self.canny_image = None
         self.full_pose_detected = False
         self.start()
 
@@ -50,6 +52,13 @@ class FineDetector(threading.Thread):
         with self.lock:
             if self.pose_image is not None:
                 return bytes(cv2.imencode(".png", self.pose_image)[1])
+            else:
+                return None
+
+    def getCannyImagePNG(self):
+        with self.lock:
+            if self.canny_image is not None:
+                return bytes(cv2.imencode(".png", self.canny_image)[1])
             else:
                 return None
 
@@ -84,6 +93,7 @@ class FineDetector(threading.Thread):
                 else:
                     image = cv2.resize(image, (self.frame_width, self.frame_height), interpolation=cv2.INTER_LINEAR)
 
+            image = cv2.flip(image, 1)
             rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             self.detector.queueImage(rgb_image)
 
@@ -97,6 +107,7 @@ class FineDetector(threading.Thread):
                         cv2.imshow("pose", pose_image)
 
                     self.pose_image = pose_image
+                    self.canny_image = cv2.Canny(rgb_image, 100, 200)
                     self.full_pose_detected = any([len(p) >= 33 for p in poses.pose_landmarks])
 
             cv2.waitKey(int(self.frame_delay))

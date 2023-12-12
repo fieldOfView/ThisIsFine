@@ -7,7 +7,7 @@ import json
 identity = pyglet.math.Mat4()
 matrix = copy.deepcopy(identity)
 
-win = pyglet.window.Window(width=1920, height=1080)
+win = pyglet.window.Window(width=1920, height=1080, fullscreen=True)
 
 src_points = [
     [0, 0],

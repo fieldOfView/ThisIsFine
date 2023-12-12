@@ -1,7 +1,6 @@
 import threading
 import requests
 import json
-import uuid
 
 from flask import Flask, request, Response, make_response
 from werkzeug.serving import make_server
@@ -27,11 +26,13 @@ class FineServer(Flask):
         Flask.__init__(self, __name__)
 
         self.pose_callback = None
+        self.canny_callback = None
         self.invoked_callback = None
 
         # make routes
         self.route("/", methods=["GET"])(self.root)
         self.route("/api/pose", methods=["GET"])(self.getPose)
+        self.route("/api/canny", methods=["GET"])(self.getCanny)
         self.route('/api/invoked', methods=['POST'])(self.handleResult)
 
         self.server = FineServerThread(self)
@@ -57,6 +58,17 @@ class FineServer(Flask):
         response.headers.set('Content-Type', 'image/png')
         return response
 
+    def getCanny(self):
+        if self.canny_callback is not None:
+            image_data = self.canny_callback()
+        else:
+            image_data = None
+
+        response = make_response(image_data)
+
+        response.headers.set('Content-Type', 'image/png')
+        return response
+
     def handleResult(self):
         # TODO: validate request and handle exceptions
 
@@ -67,38 +79,13 @@ class FineServer(Flask):
 
         return Response(status=200)
 
-    def invokeGeneration(self, host, workflow_file):
-        self.invoke_thread = threading.Thread(target=self.invokeGenerationFunction, kwargs={"host":host, "workflow_file": workflow_file})
+    def invokeGeneration(self, host, batch_file):
+        self.invoke_thread = threading.Thread(target=self.invokeGenerationFunction, kwargs={"host":host, "batch_file": batch_file})
         self.invoke_thread.start()
 
-    def invokeGenerationFunction(self, host, workflow_file):
-        with open(workflow_file) as fp:
-            workflow_data = json.load(fp)
-
-        batch_data = {
-            "batch": {
-                "graph": {
-                    "id": str(uuid.uuid4()),
-                    "nodes": {n["id"]: n for n in workflow_data["nodes"]},
-                    "edges": [
-                        {
-                            "source": {
-                                "node_id": e["source"],
-                                "field": e["sourceHandle"],
-                            },
-                            "destination": {
-                                "node_id": e["target"],
-                                "field": e["targetHandle"],
-                            },
-                        }
-                        for e in workflow_data["edges"]
-                        if e["type"] == "default"
-                    ],
-                },
-                "runs": 1,
-            },
-            "prepend": False,
-        }
+    def invokeGenerationFunction(self, host, batch_file):
+        with open(batch_file) as fp:
+            batch_data = json.load(fp)
 
         url = f"http://{host}/api/v1/queue/default/enqueue_batch"
         response = requests.post(url, json=batch_data)
