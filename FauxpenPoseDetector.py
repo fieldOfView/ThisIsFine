@@ -19,11 +19,11 @@
 import math
 import time
 
+from typing import Tuple, Optional
+
 import cv2
 import mediapipe as mp
 import numpy as np
-
-from typing import Tuple, Optional
 
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
@@ -65,7 +65,7 @@ class FauxpenPoseDetector:
             min_pose_detection_confidence=min_pose_detection_confidence,
             min_pose_presence_confidence=min_pose_presence_confidence,
             min_tracking_confidence=min_tracking_confidence,
-            result_callback=self.handleResult,
+            result_callback=self.handle_result,
         )
         self._detector = vision.PoseLandmarker.create_from_options(options)
         self._detected_landmarks: Optional[vision.PoseLandmarkerResult] = None
@@ -82,24 +82,54 @@ class FauxpenPoseDetector:
         self._fps_start_time = time.time()
 
     def close(self) -> None:
+        """
+        Closes the detector.
+
+        This method closes the detector and releases any resources used by it.
+        """
         self._detector.close()
 
-    def setDrawOptions(self, radius: int = 3, antialias: bool = False) -> None:
-        """
-        Args
-            radius: The radius to use for landmarks and connections when drawing.
-            antialias: Flag to enable antialiasing when drawing.
-        """
-        self.radius = radius
-        self.antialias = antialias
+    def set_draw_options(self, radius: int = 3, antialias: bool = False) -> None:
+            """
+            Set the draw options for landmarks and connections.
 
-    def queueImage(self, rgb_image: np.ndarray) -> None:
-        # Run pose landmarker using the model.
-        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_image)
-        t = time.time_ns() // 1_000_000
-        self._detector.detect_async(mp_image, t)
+            Args:
+                radius (int): The radius to use for landmarks and connections when drawing.
+                antialias (bool): Flag to enable antialiasing when drawing.
+            
+            Returns:
+                None
+            """
+            self.radius = radius
+            self.antialias = antialias
 
-    def handleResult(self, result: vision.PoseLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
+    def queue_image(self, rgb_image: np.ndarray) -> None:
+            """
+            Queues an RGB image for pose detection.
+
+            Args:
+                rgb_image (np.ndarray): The RGB image to be processed.
+
+            Returns:
+                None
+            """
+            # Run pose landmarker using the model.
+            mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_image)
+            t = time.time_ns() // 1_000_000
+            self._detector.detect_async(mp_image, t)
+
+    def handle_result(self, result: vision.PoseLandmarkerResult, output_image: mp.Image, timestamp_ms: int) -> None:
+        """
+        Handles the result of pose landmark detection.
+
+        Args:
+            result (vision.PoseLandmarkerResult): The result of pose landmark detection.
+            output_image (mp.Image): The output image.
+            timestamp_ms (int): The timestamp in milliseconds at the time the image was queued.
+
+        Returns:
+            None
+        """
         # Calculate the FPS
         if self._fps_counter % self._fps_calculate_frames == 0:
             self._fps = self._fps_calculate_frames / (time.time() - self._fps_start_time)
@@ -110,37 +140,45 @@ class FauxpenPoseDetector:
         self._detected_landmarks = result
         self._detected_image = output_image
 
-    def getResults(self) -> Tuple[vision.PoseLandmarkerResult, np.ndarray]:
+    def get_results(self) -> Tuple[vision.PoseLandmarkerResult, np.ndarray]:
+        """
+        Returns the latest detected landmarks and the detected image (if available).
+
+        Returns:
+            A tuple containing the detected landmarks and the detected image (if available).
+        """
         return (
             self._detected_landmarks,
             None if self._detected_image is None else self._detected_image.numpy_view()
         )
 
-    def drawPosesOnImage(
-        self,
-        image: np.ndarray,
-        poses: vision.PoseLandmarkerResult
-    ) -> None:
-        """Draws OpenPose-like landmarks and the connections on the image for all
-        detected poses.
+    def draw_poses_on_image(
+            self,
+            image: np.ndarray,
+            poses: vision.PoseLandmarkerResult
+        ) -> None:
+            """Draws OpenPose-like landmarks and the connections on the image for all
+            detected poses.
 
-        Args:
-            image: A three channel BGR image represented as numpy ndarray.
-            poses: The poselandmarker result from the detector.
-        """
+            Args:
+                image: A three channel BGR image represented as numpy ndarray.
+                poses: The poselandmarker result from the detector.
 
-        for pose_landmarks in poses.pose_landmarks:
-            # Draw the pose landmarks.
-            pose_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
-            pose_landmarks_proto.landmark.extend(
-                [
-                    landmark_pb2.NormalizedLandmark(x=landmark.x, y=landmark.y, z=landmark.z)
-                    for landmark in pose_landmarks
-                ]
-            )
-            self._drawLandmarksOnImage(image, pose_landmarks_proto)
+            Returns:
+                None
+            """
+            for pose_landmarks in poses.pose_landmarks:
+                # Draw the pose landmarks.
+                pose_landmarks_proto = landmark_pb2.NormalizedLandmarkList()
+                pose_landmarks_proto.landmark.extend(
+                    [
+                        landmark_pb2.NormalizedLandmark(x=landmark.x, y=landmark.y, z=landmark.z)
+                        for landmark in pose_landmarks
+                    ]
+                )
+                self._draw_landmarks_on_image(image, pose_landmarks_proto)
 
-    def _drawLandmarksOnImage(
+    def _draw_landmarks_on_image(
         self,
         image: np.ndarray,
         landmark_list: landmark_pb2.NormalizedLandmarkList,
@@ -358,16 +396,16 @@ if __name__ == "__main__":
 
         image = cv2.flip(image, 1)
         rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        detector.queueImage(rgb_image)
+        detector.queue_image(rgb_image)
 
-        (poses, processed_image) = detector.getResults()
+        (poses, processed_image) = detector.get_results()
         if poses is not None:
             if args.hideVideo:
                 show_image = np.zeros_like(rgb_image)
             else:
                 show_image = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
 
-            detector.drawPosesOnImage(show_image, poses)
+            detector.draw_poses_on_image(show_image, poses)
             cv2.imshow("pose", show_image)
 
         # Stop the program if the ESC key is pressed.

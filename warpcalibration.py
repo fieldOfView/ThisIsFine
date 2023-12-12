@@ -1,13 +1,16 @@
+"""
+A quick pyglet application for calibrating a quad warp / keystone correction.
+"""
+import copy
+import json
 import pyglet
 import cv2
 import numpy as np
-import copy
-import json
 
 identity = pyglet.math.Mat4()
 matrix = copy.deepcopy(identity)
 
-win = pyglet.window.Window(width=1920, height=1080, fullscreen=True)
+win = pyglet.window.Window(width=1920, height=1080, fullscreen=False)
 
 src_points = [
     [0, 0],
@@ -25,8 +28,17 @@ point_shapes = [
 ]
 
 
-def make_matrix():
-    homography, mask = cv2.findHomography(np.asarray(src_points), np.asarray(dest_points))
+def make_matrix() -> pyglet.math.Mat4:
+    """
+    Calculates the homography matrix using the source and destination points.
+
+    Returns:
+    matrix (pyglet.math.Mat4): The homography matrix.
+    """
+    homography, mask = cv2.findHomography(
+        np.asarray(src_points), np.asarray(dest_points)
+    )
+
     matrix = pyglet.math.Mat4([
         homography[0][0], homography[1][0], 0.0, homography[2][0],
         homography[0][1], homography[1][1], 0.0, homography[2][1],
@@ -35,18 +47,38 @@ def make_matrix():
     ])
     return matrix
 
-
 matrix = make_matrix()
 
-batch = pyglet.graphics.Batch()
-rect = pyglet.shapes.Rectangle(0, 0, win.width, win.height, color=(127, 127, 127), batch=batch)
-line1 = pyglet.shapes.Line(0, 0, win.width, win.height, batch=batch)
-line2 = pyglet.shapes.Line(0, win.height, win.width, 0, batch=batch)
-circle = pyglet.shapes.Arc(0.1 * win.width, 0.1 * win.height, radius=0.05 * win.width, color=(0, 255, 0), batch=batch)
+def make_batch() -> pyglet.graphics.Batch:
+    """
+    Creates a batch graphic for the calibration grid.
 
+    Returns:
+    batch (pyglet.graphics.Batch): The batch graphic.
+    """
+
+    batch = pyglet.graphics.Batch()
+    rect = pyglet.shapes.Rectangle(
+        0, 0, win.width, win.height, color=(127, 127, 127), batch=batch
+    )
+    line1 = pyglet.shapes.Line(0, 0, win.width, win.height, batch=batch)
+    line2 = pyglet.shapes.Line(0, win.height, win.width, 0, batch=batch)
+    circle = pyglet.shapes.Arc(
+        0.1 * win.width,
+        0.1 * win.height,
+        radius=0.05 * win.width,
+        color=(0, 255, 0),
+        batch=batch,
+    )
+    return batch
+
+batch = make_batch()
 
 @win.event
 def on_draw():
+    """
+    Event handler for drawing the batch graphic to the window.
+    """
     win.clear()
     win.view = matrix
     batch.draw()
@@ -55,7 +87,14 @@ def on_draw():
 
 
 @win.event
-def on_key_press(symbol, modifiers):
+def on_key_press(symbol, modifiers) -> None:
+    """
+    Event handler for key press events.
+
+    Args:
+    symbol (int): The key symbol.
+    modifiers (int): The key modifiers.
+    """
     global active_point_index, matrix, dest_points
     if symbol >= pyglet.window.key._1 and symbol <= pyglet.window.key._4:
         point_shapes[active_point_index].color = (0, 255, 255)
@@ -70,10 +109,7 @@ def on_key_press(symbol, modifiers):
         matrix = make_matrix()
 
     elif symbol == pyglet.window.key.S:
-        data = {
-            "points": dest_points,
-            "matrix": matrix
-        }
+        data = {"points": dest_points, "matrix": matrix}
         with open("resources/warp.json", "w") as f:
             json.dump(data, f)
 
@@ -90,7 +126,13 @@ def on_key_press(symbol, modifiers):
 
 
 @win.event
-def on_text_motion(motion):
+def on_text_motion(motion) -> None:
+    """
+    Event handler for repeating arrow-key events.
+
+    Args:
+    motion (int): The text motion.
+    """
     global active_point_index, matrix
     direction = motion - pyglet.window.key.MOTION_LEFT
     distance = (-1 if (direction >> 1) else 1) * (1 if (direction & 1) else -1)

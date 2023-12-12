@@ -1,15 +1,16 @@
-from FauxpenPoseDetector import FauxpenPoseDetector
+from typing import Optional
 
 import threading
 import cv2
 import numpy as np
 
+from fauxpenposedetector import FauxpenPoseDetector
 
 class FineDetector(threading.Thread):
-    def __init__(self):
+    def __init__(self) -> None:
         threading.Thread.__init__(self)
 
-        self.stopRequest = threading.Event()
+        self.stop_request = threading.Event()
 
         self.detector = FauxpenPoseDetector(
             model="resources/pose_landmarker.task",
@@ -18,7 +19,7 @@ class FineDetector(threading.Thread):
             min_pose_presence_confidence=0.5,
             min_tracking_confidence=0.5,
         )
-        self.detector.setDrawOptions(antialias=True, radius=2)
+        self.detector.set_draw_options(antialias=True, radius=2)
 
         self.source = 0 #"testing/dance1.mp4"
         self.frame_width = 640
@@ -34,42 +35,89 @@ class FineDetector(threading.Thread):
         self.full_pose_detected = False
         self.start()
 
-    def requestStop(self):
-        self.stopRequest.set()
+    def request_stop(self) -> None:
+        """
+        Requests the FineDetector to stop processing, ending its threaded loop.
+        """
+        self.stop_request.set()
 
-    def getFullPoseDetected(self):
+    def get_full_pose_detected(self) -> bool:
+        """
+        Returns a boolean indicating whether the full pose is detected.
+
+        Returns:
+            bool: True if the full pose is detected, False otherwise.
+        """
         with self.lock:
             return self.full_pose_detected
 
-    def getFlippedPoseImageBytes(self):
+    def get_flipped_pose_image_bytes(self) -> Optional[bytes]:
+        """
+        Returns the flipped pose image as bytes.
+
+        Returns:
+            Optional[bytes]: The flipped pose image as bytes, or None if the pose image is not available.
+        """
         with self.lock:
             if self.pose_image is not None:
                 return bytes(cv2.cvtColor(cv2.flip(self.pose_image, 0), cv2.COLOR_BGR2RGB))
             else:
                 return None
 
-    def getPoseImagePNG(self):
+    def get_pose_image_png(self) -> Optional[bytes]:
+        """
+        Returns the pose image in PNG format as bytes.
+
+        Returns:
+            Optional[bytes]: The pose image in PNG format as bytes, or None if the pose image is not available.
+        """
         with self.lock:
             if self.pose_image is not None:
                 return bytes(cv2.imencode(".png", self.pose_image)[1])
             else:
                 return None
 
-    def getCannyImagePNG(self):
+    def get_canny_image_png(self) -> Optional[bytes]:
+        """
+        Returns the Canny image in PNG format.
+
+        Returns:
+            bytes: The Canny image in PNG format, or None if the Canny image is not available.
+        """
         with self.lock:
             if self.canny_image is not None:
                 return bytes(cv2.imencode(".png", self.canny_image)[1])
             else:
                 return None
 
-    def makeImage(self, data):
-        # convert image data buffer to uint8
-        image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
-        image = cv2.cvtColor(cv2.flip(image, 0), cv2.COLOR_BGR2RGB)
+    def make_image(self, data: bytes) -> np.ndarray:
+            """
+            Converts image data buffer to a numpy array.
 
-        return image
+            Args:
+                data (bytes): The image data buffer.
+
+            Returns:
+                np.ndarray: The converted image as a numpy array.
+            """
+            # convert image data buffer to uint8
+            image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
+            image = cv2.cvtColor(cv2.flip(image, 0), cv2.COLOR_BGR2RGB)
+
+            return image
 
     def run(self):
+        """
+        Runs the FineDetector by capturing images from the camera and performing inference.
+
+        This method continuously captures images from the camera and runs inference using the FineDetector.
+        It sets the frame width and height if provided, and then processes each captured image.
+        The processed image is used to detect poses and draw them on the image if any poses are detected.
+        The pose image and canny image are updated accordingly.
+
+        Returns:
+            None
+        """
         cap = cv2.VideoCapture(self.source)
         if self.frame_width != 0:
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
@@ -77,7 +125,7 @@ class FineDetector(threading.Thread):
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
 
         # Continuously capture images from the camera and run inference
-        while cap.isOpened() and not self.stopRequest.is_set():
+        while cap.isOpened() and not self.stop_request.is_set():
             success, image = cap.read()
             if not success:
                 if self.loop:
@@ -95,14 +143,15 @@ class FineDetector(threading.Thread):
 
             image = cv2.flip(image, 1)
             rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-            self.detector.queueImage(rgb_image)
+            self.detector.queue_image(rgb_image)
 
-            (poses, processed_image) = self.detector.getResults()
+            (poses, processed_image) = self.detector.get_results()
             pose_image = np.zeros_like(rgb_image)
             with self.lock:
+                # Rest of the code...
                 self.full_pose_detected = False
                 if poses is not None:
-                    self.detector.drawPosesOnImage(pose_image, poses)
+                    self.detector.draw_poses_on_image(pose_image, poses)
                     if self.debug:
                         cv2.imshow("pose", pose_image)
 
