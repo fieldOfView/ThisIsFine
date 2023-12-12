@@ -146,6 +146,9 @@ class ThisIsFineWindow(pyglet.window.Window):
                     self._flash_rect.opacity = int(255 * (1 - time_passed))
                     self._flash_batch.draw()
 
+                if time_passed > 60:
+                    self.setState(FineState.DETECTING_POSES)
+
     def on_key_press(self, symbol, modifiers):
         super().on_key_press(symbol, modifiers)
 
