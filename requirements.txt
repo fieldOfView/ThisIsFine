@@ -1,0 +1,4 @@
+mediapipe
+flask
+pyglet
+requests
