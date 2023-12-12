@@ -161,7 +161,7 @@ class ThisIsFineWindow(pyglet.window.Window):
         )
 
     def invokeGeneration(self):
-        self._server.invokeGeneration("starscream.local:9090", "resources/batch.json")
+        self._server.invokeGeneration("starscream.local:9090", "resources/workflow.json")
 
         self._frozen_pose_image = self._pose_image
         self._frozen_pose_png_data = self._pose_detector.getPoseImagePNG()

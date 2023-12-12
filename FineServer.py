@@ -1,6 +1,7 @@
 import threading
 import requests
 import json
+import uuid
 
 from flask import Flask, request, Response, make_response
 from werkzeug.serving import make_server
@@ -79,13 +80,56 @@ class FineServer(Flask):
 
         return Response(status=200)
 
-    def invokeGeneration(self, host, batch_file):
-        self.invoke_thread = threading.Thread(target=self.invokeGenerationFunction, kwargs={"host":host, "batch_file": batch_file})
+    def invokeGeneration(self, host, workflow_file):
+        self.invoke_thread = threading.Thread(target=self.invokeGenerationFunction, kwargs={"host":host, "workflow_file": workflow_file})
         self.invoke_thread.start()
 
-    def invokeGenerationFunction(self, host, batch_file):
-        with open(batch_file) as fp:
-            batch_data = json.load(fp)
+    def invokeGenerationFunction(self, host, workflow_file):
+        with open(workflow_file) as fp:
+            workflow_data = json.load(fp)
+
+        # create a graph and batch from the workflow
+
+        batch_nodes = {}
+        for node in workflow_data["nodes"]:
+            node_data = node["data"]
+            node_inputs = {}
+
+            for input_key in node_data["inputs"]:
+                input_data = node_data["inputs"][input_key]
+                if "value" in input_data:
+                    node_inputs[input_key] = input_data["value"]
+
+            del node_data["inputs"]
+            del node_data["outputs"]
+            node_data.update(node_inputs)
+
+            batch_nodes[node["id"]] = node_data
+
+        batch_data = {
+            "batch": {
+                "graph": {
+                    "id": str(uuid.uuid4()),
+                    "nodes": batch_nodes,
+                    "edges": [
+                        {
+                            "source": {
+                                "node_id": edge["source"],
+                                "field": edge["sourceHandle"],
+                            },
+                            "destination": {
+                                "node_id": edge["target"],
+                                "field": edge["targetHandle"],
+                            },
+                        }
+                        for edge in workflow_data["edges"]
+                        if edge["type"] == "default"
+                    ],
+                },
+                "runs": 1,
+            },
+            "prepend": False,
+        }
 
         url = f"http://{host}/api/v1/queue/default/enqueue_batch"
         response = requests.post(url, json=batch_data)
